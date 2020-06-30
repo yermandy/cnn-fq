@@ -1,0 +1,7 @@
+.vscode
+__pycache__
+
+temp/*
+resources/*
+images/*
+visualization/*
