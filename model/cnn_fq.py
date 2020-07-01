@@ -7,7 +7,7 @@ class CNNFQ(nn.Module):
 
     def __init__(self):
         super(CNNFQ, self).__init__()
-        self.state = None
+        self.checkpoint = None
         # 140.73 | 107.02 | 91.46
         # 32.04  | 28.06  | 29.32
 
@@ -533,46 +533,52 @@ class CNNFQ(nn.Module):
         probabilities = self.prob(feature)
         return probabilities
 
-    def set_state(self, state):
-        """ Sets state of the model for futher training
+    def set_checkpoint(self, checkpoint):
+        """ Sets checkpoint of the model for futher training
         
         Parameters
         ----------
-        state : dict
+        checkpoint : dict
             Dictionary that contains: Fs, Ls, val_errors, trn_errors, lr, em_epoch, cnn_epoch
         """
-        self.state = state
+        self.checkpoint = checkpoint
 
     def get_em_epoch(self):
-        return self.state['em_epoch'] if 'em_epoch' in self.state else 0
+        return self.checkpoint['em_epoch'] if 'em_epoch' in self.checkpoint else 0
 
     def get_cnn_epoch(self):
-        return self.state['cnn_epoch'] if 'cnn_epoch' in self.state else 0
+        return self.checkpoint['cnn_epoch'] if 'cnn_epoch' in self.checkpoint else 0
     
     def get_val_errors(self):
-        return self.state['val_errors'].tolist() if 'val_errors' in self.state else []
+        return self.checkpoint['val_errors'] if 'val_errors' in self.checkpoint else []
 
     def get_trn_errors(self):
-        return self.state['trn_errors'].tolist() if 'trn_errors' in self.state else []
+        return self.checkpoint['trn_errors'] if 'trn_errors' in self.checkpoint else []
 
     def get_lr(self):
-        return self.state['lr'].tolist() if 'lr' in self.state else []
+        return self.checkpoint['lr'] if 'lr' in self.checkpoint else []
 
     def get_Fs(self):
-        return self.state['Fs'].tolist() if 'Fs' in self.state else []
+        return self.checkpoint['Fs'] if 'Fs' in self.checkpoint else []
 
     def get_Ls(self):
-        return self.state['Ls'].tolist() if 'Ls' in self.state else []
+        return self.checkpoint['Ls'] if 'Ls' in self.checkpoint else []
 
     def get_q(self, init_func, arg):
-        return self.state['q'] if 'q' in self.state else init_func(arg)
+        return self.checkpoint['q'] if 'q' in self.checkpoint else init_func(arg)
 
-def model(gpu=0, weights=None, state={}):
-    device = torch.device(f'cuda:{gpu}' if torch.cuda.is_available() else 'cpu')
+    def set_optimizer_state_dict(self, optimizer):
+        if 'optimizer_state_dict' in self.checkpoint:
+            optimizer.load_state_dict(self.checkpoint['optimizer_state_dict'])
+
+def model(cuda=0, checkpoint_path=''):
+    device = torch.device(f'cuda:{cuda}' if torch.cuda.is_available() else 'cpu')
     model = CNNFQ().to(device)
-    if weights is not None:
-        dict = torch.load(weights, map_location=device)
-        model.load_state_dict(dict)
-    model.set_state(state)
+    checkpoint = {}
+    if checkpoint_path:
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        if 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+    model.set_checkpoint(checkpoint)
     cudnn.benchmark = True
     return model

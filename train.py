@@ -10,15 +10,15 @@ import torchvision.transforms as transforms
 
 
 os.makedirs('resources', exist_ok=True)
-os.makedirs('results/weights', exist_ok=True)
+os.makedirs('results/checkpoints', exist_ok=True)
 os.makedirs('results/plots', exist_ok=True)
 
 
-def plot_error(val_errors, trn_errors, from_epoch=1):
+def plot_error(val_errors, trn_errors, from_epoch=1, vline_each=999):
     epochs = np.arange(from_epoch, len(val_errors) + from_epoch)
     fig, ax = plt.subplots(1, 1, figsize=(8, 5))
     for epoch in epochs:
-        if epoch % 5 == 0 and epoch != 0:
+        if epoch % vline_each == 0 and epoch != 0:
             plt.axvline(x=epoch, alpha=0.5, ls='--', c='black')
     ax.plot(epochs, val_errors, lw=2, label='Validation')
     ax.plot(epochs, trn_errors, lw=2, label='Training')
@@ -30,12 +30,12 @@ def plot_error(val_errors, trn_errors, from_epoch=1):
     plt.close()
 
 
-def plot_criterial(Fs, Ls, from_epoch=1):
+def plot_criterial(Fs, Ls, from_epoch=1, vline_each=999):
     epochs = np.arange(from_epoch, len(Fs) + from_epoch)
     fig, ax = plt.subplots(1, 1, figsize=(8, 5))
     for epoch in epochs:
-        if epoch % 5 == 0 and epoch != 0:
-            plt.axvline(x=epoch, alpha=0.5, ls='--  ', c='black')
+        if epoch % vline_each == 0 and epoch != 0:
+                plt.axvline(x=epoch, alpha=0.5, ls='--', c='black')
     ax.plot(epochs, Ls, lw=2, label='L(θ)')
     ax.plot(epochs, Fs, lw=2, label='F(θ,q)')
     fontsize = 14
@@ -176,7 +176,7 @@ def forward_pass(loader, dataset_len, device):
 
 def train(net : model):
     batch_size = 80
-    cnn_epochs = 5
+    cnn_epochs = 3
     em_epochs = 30
     lr = net.get_lr() if net.get_lr() else 0.001
     workers = 8
@@ -194,8 +194,8 @@ def train(net : model):
     faces  = np.genfromtxt('resources/casia_boxes_refined.csv', dtype=np.str, delimiter=',')
 
     # ! comment while training
-    # trn = trn[:1000]
-    # val = val[:1000]
+    trn = trn[:100]
+    val = val[:100]
 
     transform = transforms.Compose([
                 transforms.Resize(256),
@@ -216,6 +216,7 @@ def train(net : model):
     val_labels  = val_dataset.get_labels()
 
     optimizer = optim.Adam(net.parameters(), lr=lr)
+    net.set_optimizer_state_dict(optimizer)
     
     trn_errors = net.get_trn_errors()
     val_errors = net.get_val_errors()
@@ -228,24 +229,12 @@ def train(net : model):
     alpha = calculate_alpha(q)
     PyIabc, P0Iabc, P1Iabc = calculate_PyIabc(q, trn_labels)
 
-    skip = True
-
-    for em_epoch in range(em_epochs):
-
-        if em_epoch < net.get_em_epoch():
-            print(f"ignore em epoch #{em_epoch + 1} ")
-            continue
+    for em_epoch in range(net.get_em_epoch(), em_epochs):
 
         # ? M-step -> maximizing F(θ,q) w.r.t p_θ(x|X) and p_θ(y|a,b,c)
 
-        for cnn_epoch in range(cnn_epochs):
+        for cnn_epoch in range(net.get_cnn_epoch(), cnn_epochs):
 
-            if cnn_epoch < net.get_cnn_epoch() and skip:
-                print(f"ignore epoch #{em_epoch * cnn_epochs + cnn_epoch + 1} ")
-                continue
-            else:
-                skip = False
-            
             print(f"\nepoch #{em_epoch * cnn_epochs + cnn_epoch + 1}")
             # print(f"em epoch: {em_epoch + 1}, cnn epoch: {cnn_epoch + 1}")
             start  = 0
@@ -284,7 +273,6 @@ def train(net : model):
                 # trn_probs[start*2+0:finish*2+0:2] = 1 - output
                 # trn_probs[start*2+1:finish*2+1:2] = output 
                 print(f"-> processed {finish}/{trn_n_img} images in {time() - run:.3f} sec, loss {loss:.5f}")
-
             
             net.eval()
 
@@ -306,15 +294,19 @@ def train(net : model):
             print(f"Validation error {(val_error * 100):.2f}%")
 
 
-            # save cnn model and q
-            model_n = em_epoch * cnn_epochs + cnn_epoch + 1
-            np.savez(f'results/weights/info_{model_n}.npz', 
-                Fs=Fs, Ls=Ls, lr=lr, q=q,
-                trn_errors=trn_errors, val_errors=val_errors,
-                em_epoch=em_epoch, cnn_epoch=cnn_epoch)
-            torch.save(net.state_dict(), f'results/weights/model_{model_n}.pt')
-            plot_criterial(Fs, Ls)
-            plot_error(val_errors, trn_errors)
+            print("Saving results ...")
+            # save model weights, data and q
+            checkpoint_n = em_epoch * cnn_epochs + cnn_epoch + 1
+            checkpoint = {
+                'Fs': Fs, 'Ls': Ls, 'lr': lr, 'q': q,
+                'trn_errors': trn_errors, 'val_errors': val_errors,
+                'em_epoch': em_epoch, 'cnn_epoch': cnn_epoch + 1,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict()
+            }
+            torch.save(checkpoint, f'results/checkpoints/checkpoint_{checkpoint_n}.pt')
+            plot_criterial(Fs, Ls, vline_each=cnn_epochs)
+            plot_error(val_errors, trn_errors, vline_each=cnn_epochs)
 
         # ? E-step
         print("Calculating new q(a,b,c)")
@@ -322,29 +314,21 @@ def train(net : model):
         q = q / np.sum(q, axis=1)[:, np.newaxis]
         alpha = calculate_alpha(q)
         PyIabc, P0Iabc, P1Iabc = calculate_PyIabc(q, trn_labels)
-        ''' 
-        F = calculate_F(q, PyIabc, trn_probs)
-        L = calculate_L(PyIabc, trn_probs)
-        Fs.append(F)
-        Ls.append(L)
-        plot_criterial(Fs, Ls)
-        print(f"E-step: F(Θ,q)={F:.2f} | L(Θ)={L:.2f}")
-        '''
 
-        # ? changing learing rate
-        # lr /= 1.25
-        # optimizer = optim.Adam(net.parameters(), lr=lr)
-
-        np.savez(f'results/weights/info_{model_n}.npz', 
-            Fs=Fs, Ls=Ls, lr=lr, q=q,
-            trn_errors=trn_errors, val_errors=val_errors,
-            em_epoch=em_epoch, cnn_epoch=cnn_epoch)
+        print("Saving results ...")
+        checkpoint = {
+            'Fs': Fs, 'Ls': Ls, 'lr': lr, 'q': q,
+            'trn_errors': trn_errors, 'val_errors': val_errors,
+            'em_epoch': em_epoch + 1, 'cnn_epoch': 0,
+            'model_state_dict': net.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict()
+        }
+        torch.save(checkpoint, f'results/checkpoints/checkpoint_{checkpoint_n}.pt')
 
         
 if __name__ == '__main__':
-    # weights = join('results', 'trained_models', 'model_8.pt')
-    # state = dict(np.load(join('results', 'trained_models', 'info_8.npz')))
-    
-    # net = model(gpu=4, weights=weights, state=state)
-    net = model(gpu=1)
+    cuda = 1
+    checkpoint = 'results/checkpoints/checkpoint_3.pt'
+    # checkpoint = ''
+    net = model(cuda=cuda, checkpoint_path=checkpoint)
     train(net)
