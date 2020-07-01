@@ -7,6 +7,15 @@ import matplotlib.pyplot as plt
 from dataset import ListDataset
 from model.cnn_fq import model
 import torchvision.transforms as transforms
+import argparse
+
+
+parser = argparse.ArgumentParser(description='CNN-FQ training')
+parser.add_argument('--batch_size', default=80, type=int, help='Batch size')
+parser.add_argument('--workers', default=8, type=int, help='Workers number')
+parser.add_argument('--checkpoint', default='', type=int, help='Path to checkpoint file')
+parser.add_argument('--cuda', default=0, type=int, help='Cuda device')
+args = parser.parse_args()
 
 
 os.makedirs('resources', exist_ok=True)
@@ -175,16 +184,13 @@ def forward_pass(loader, dataset_len, device):
 
 
 def train(net : model):
-    batch_size = 80
     cnn_epochs = 3
     em_epochs = 30
     lr = net.get_lr() if net.get_lr() else 0.001
-    workers = 8
     momentum = 0.9
     params = {
-        "batch_size": batch_size,
-        "shuffle": False,
-        "num_workers": workers,
+        "batch_size": args.batch_size,
+        "num_workers": args.workers,
         "pin_memory": True
     }
 
@@ -194,8 +200,8 @@ def train(net : model):
     faces  = np.genfromtxt('resources/casia_boxes_refined.csv', dtype=np.str, delimiter=',')
 
     # ! comment while training
-    trn = trn[:100]
-    val = val[:100]
+    # trn = trn[:100]
+    # val = val[:100]
 
     transform = transforms.Compose([
                 transforms.Resize(256),
@@ -301,6 +307,7 @@ def train(net : model):
                 'Fs': Fs, 'Ls': Ls, 'lr': lr, 'q': q,
                 'trn_errors': trn_errors, 'val_errors': val_errors,
                 'em_epoch': em_epoch, 'cnn_epoch': cnn_epoch + 1,
+                'em_epochs': em_epochs, 'cnn_epochs': cnn_epochs,
                 'model_state_dict': net.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict()
             }
@@ -320,6 +327,7 @@ def train(net : model):
             'Fs': Fs, 'Ls': Ls, 'lr': lr, 'q': q,
             'trn_errors': trn_errors, 'val_errors': val_errors,
             'em_epoch': em_epoch + 1, 'cnn_epoch': 0,
+            'em_epochs': em_epochs, 'cnn_epochs': cnn_epochs,
             'model_state_dict': net.state_dict(),
             'optimizer_state_dict': optimizer.state_dict()
         }
@@ -327,8 +335,5 @@ def train(net : model):
 
         
 if __name__ == '__main__':
-    cuda = 1
-    checkpoint = 'results/checkpoints/checkpoint_3.pt'
-    # checkpoint = ''
-    net = model(cuda=cuda, checkpoint_path=checkpoint)
+    net = model(cuda=args.cuda, checkpoint_path=args.checkpoint)
     train(net)
