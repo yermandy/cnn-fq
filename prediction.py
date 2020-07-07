@@ -12,12 +12,12 @@ import argparse
 
 parser = argparse.ArgumentParser(description='CNN-FQ quality prediction')
 parser.add_argument('--cuda', default=0, type=int, help='cuda device to run on')
-parser.add_argument('--weights', required=True, type=str, help='CNN-FQ weight for model')
-parser.add_argument('--ref', required=True, type=str, help='CSV file with images and bouding boxes for quality prediction')
+parser.add_argument('--ref', required=True, type=str, help='path to CSV file with images and bouding boxes for quality prediction')
 parser.add_argument('--images', required=True, type=str, help='path to images')
 parser.add_argument('--save_to', default='results/predictions', type=str, help='folder to save predictions')
 parser.add_argument('--batch', default=90, type=int, help='batch size')
 parser.add_argument('--workers', default=16, type=int, help='numbers of workers')
+parser.add_argument('--checkpoint', default='', type=str, help='Path to checkpoint file')
 args = parser.parse_args()
 
 
@@ -63,5 +63,5 @@ def predict(net):
 
 
 if __name__ == '__main__':
-    net = model(gpu=args.cuda, weights=args.weights)
+    net = model(cuda=args.cuda, checkpoint_path=args.checkpoint)
     predict(net)
