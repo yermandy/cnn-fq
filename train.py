@@ -6,14 +6,16 @@ from time import time
 import matplotlib.pyplot as plt
 from dataset import ListDataset
 from model.cnn_fq import model
+from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import argparse
+import telegram
 
 
 parser = argparse.ArgumentParser(description='CNN-FQ training')
-parser.add_argument('--batch_size', default=80, type=int, help='Batch size')
-parser.add_argument('--workers', default=8, type=int, help='Workers number')
-parser.add_argument('--checkpoint', default='', type=int, help='Path to checkpoint file')
+parser.add_argument('--batch_size', default=60, type=int, help='Batch size')
+parser.add_argument('--workers', default=16, type=int, help='Workers number')
+parser.add_argument('--checkpoint', default='', type=str, help='Path to checkpoint file')
 parser.add_argument('--cuda', default=0, type=int, help='Cuda device')
 args = parser.parse_args()
 
@@ -35,7 +37,9 @@ def plot_error(val_errors, trn_errors, from_epoch=1, vline_each=999):
     ax.legend(loc='upper right', fontsize=fontsize)
     ax.set_xlabel('Epoch', fontsize=fontsize)
     ax.set_ylabel('Error', fontsize=fontsize)
-    fig.savefig('results/plots/error.png', dpi = 300, bbox_inches='tight')
+    img_path = 'results/plots/error.png'
+    fig.savefig(img_path, dpi = 300, bbox_inches='tight')
+    telegram.send_photo_telegram(img_path)
     plt.close()
 
 
@@ -51,12 +55,14 @@ def plot_criterial(Fs, Ls, from_epoch=1, vline_each=999):
     ax.set_xlabel('Epoch', fontsize=fontsize)
     ax.set_ylabel('Estimated likelihood', fontsize=fontsize)
     ax.legend(loc='lower right', fontsize=fontsize)
-    fig.savefig('results/plots/objective.png', dpi = 300, bbox_inches='tight')
+    img_path = 'results/plots/objective.png'
+    fig.savefig(img_path, dpi = 300, bbox_inches='tight')
+    telegram.send_photo_telegram(img_path)
     plt.close()
 
 
 def init_q(labels, e=0.1):
-    # ? q => [ q(0,0,0) q(0,0,1) ... q(1,1,0) q(1,1,1) ]
+    ## q => [ q(0,0,0) q(0,0,1) ... q(1,1,0) q(1,1,1) ]
     q = np.empty((labels.shape[0], 8))
     pos = [0 + e, 1 + e, 1 + e, 1 + e, 2 + e, 2 + e, 2 + e, 3 + e]
     neg = [3 + e, 2 + e, 2 + e, 2 + e, 1 + e, 1 + e, 1 + e, 0 + e]
@@ -69,32 +75,32 @@ def init_q(labels, e=0.1):
 
 def create_dataset(triplets, faces, transform=None):
     triplets_len = triplets.shape[0]
-    triplets_labels  = triplets[:, 3]
+    triplets_labels = triplets[:, 3]
     triplets_indecies = np.empty((triplets_len * 3), dtype=np.int)
     triplets_indecies[0::3] = triplets[:, 0]
     triplets_indecies[1::3] = triplets[:, 1]
     triplets_indecies[2::3] = triplets[:, 2]
-    trn_faces = faces[triplets_indecies]
-    paths     = trn_faces[:, 0] # array containing paths to photos
-    bbs       = trn_faces[:, 1:5].astype(np.int) # array with bounding boxes
+    faces = faces[triplets_indecies]
+    paths = faces[:, 0] # array containing paths to photos
+    bbs = faces[:, 1:5].astype(np.int) # array with bounding boxes
     return ListDataset(paths, bbs, triplets_labels, transform=transform, path_to_images='images/casia')
 
 
 def split_pX(pX):
-    pA = pX[:, 0:2] # ? p(a=0|A) p(a=1|A)
-    pB = pX[:, 2:4] # ? p(b=0|B) p(b=1|B)
-    pC = pX[:, 4:6] # ? p(c=0|C) p(c=1|C)
+    pA = pX[:, 0:2] ## p(a=0|A) p(a=1|A)
+    pB = pX[:, 2:4] ## p(b=0|B) p(b=1|B)
+    pC = pX[:, 4:6] ## p(c=0|C) p(c=1|C)
     return pA, pB, pC
 
 
 def calculate_PyIabc(q, labels):
-    # ? p(y=1|a,b,c), (a,b,c) ∈ {0,1}^3
+    ## p(y=1|a,b,c), (a,b,c) ∈ {0,1}^3
     p1Iabc = np.sum(q[labels == 1], axis=0) / np.sum(q, axis=0)
     p1Iabc = np.atleast_2d(p1Iabc)
-    # ? p(y=0|a,b,c), (a,b,c) ∈ {0,1}^3
+    ## p(y=0|a,b,c), (a,b,c) ∈ {0,1}^3
     p0Iabc = np.sum(q[labels == 0], axis=0) / np.sum(q, axis=0)
     p0Iabc = np.atleast_2d(p0Iabc)
-    # ? p(y_i|a,b,c), ∀i ∈ |Y|, (a,b,c) ∈ {0,1}^3
+    ## p(y_i|a,b,c), ∀i ∈ |Y|, (a,b,c) ∈ {0,1}^3
     PyIabc = np.empty((labels.shape[0], 8))
     PyIabc[labels == 0] = p0Iabc
     PyIabc[labels == 1] = p1Iabc
@@ -121,7 +127,7 @@ def calculate_L(PyIabc, pX):
 
 
 def calculate_q(PyIabc, pX):
-    # ? q => [ q(0,0,0) q(0,0,1) ... q(1,1,0) q(1,1,1) ]
+    ## q => [ q(0,0,0) q(0,0,1) ... q(1,1,0) q(1,1,1) ]
     q = np.empty((pX.shape[0], 8))
     pA, pB, pC = split_pX(pX)
     q[:, 0] = PyIabc[:, 0] * pA[:, 0] * pB[:, 0] * pC[:, 0]
@@ -136,7 +142,7 @@ def calculate_q(PyIabc, pX):
 
 
 def calculate_error(P1Iabc, probs, labels):
-    # ? p(1|A,B,C) = sum{p(1|a,b,c) * p(a|A) * p(b|B) * p(c|C)}, where (a,b,c)∈(0,1)^3
+    ## p(1|A,B,C) = sum{p(1|a,b,c) * p(a|A) * p(b|B) * p(c|C)}, where (a,b,c)∈(0,1)^3
     q = calculate_q(P1Iabc, probs)
     q = np.sum(q, axis=1)
     predictions = np.where(q > 0.5, 1, 0)
@@ -145,7 +151,7 @@ def calculate_error(P1Iabc, probs, labels):
 
 
 def calculate_alpha(q):
-    # ? alpha => [ ⍺(a=0) ⍺(a=1) β(b=0) β(b=1) γ(c=0) γ(c=1) ]
+    ## alpha => [ ⍺(a=0) ⍺(a=1) β(b=0) β(b=1) c(c=0) γ(c=1) ]
     alpha = np.empty((q.shape[0], 6))
     alpha[:, 0] = np.sum(q[:, 0:4], axis=1)
     alpha[:, 1] = np.sum(q[:, 4:8], axis=1)
@@ -153,41 +159,50 @@ def calculate_alpha(q):
     alpha[:, 3] = np.sum(q[:, [2,3,6,7]], axis=1)
     alpha[:, 4] = np.sum(q[:, [0,2,4,6]], axis=1)
     alpha[:, 5] = np.sum(q[:, [1,3,5,7]], axis=1)
-    alpha = alpha.ravel()
+    # alpha = alpha.ravel()
+    alpha = alpha.reshape(-1, 2)
     alpha = torch.tensor(alpha, dtype=torch.float32)
     return alpha
 
 
-def forward_pass(loader, dataset_len, device):
-    # ? p(a=0|A) p(a=1|A) ... p(c=1|C)
+def forward_pass(net, loader, dataset_len, device):
+    net.eval()
+
+    ## p(a=0|A) p(a=1|A) p(b=0|B) p(b=1|B) p(c=0|C) p(c=1|C)
     probs = np.empty((dataset_len, 6))
     probs = probs.ravel()
     start = 0
     finish = 0
 
     run = time()
+    batch_time = time()
     with torch.no_grad():
-        for x in loader:
+        for i, x in enumerate(loader):
             x = x.to(device)
             output = net(x).squeeze()
             out_len = output.shape[0]
             start = finish
             finish += out_len
+
+            ## output -> p(x=1|X), where x∈{a,b,c} and X∈{A,B,C} resp.
             output = output.detach().cpu().numpy()
-            # ? output => p(x=1|X), where x∈{a,b,c}, X∈{A,B,C}
+            
             probs[start*2+0:finish*2+0:2] = 1 - output
-            probs[start*2+1:finish*2+1:2] = output            
-    
+            probs[start*2+1:finish*2+1:2] = output
+            if i % 100 == 0:
+                print(f"-> processed {finish}/{dataset_len * 3} images in {time() - batch_time:.3f} sec")
+                batch_time = time()
+    probs[probs == 0] = 0.001
+    probs[probs == 1] = 0.999
     probs = probs.reshape((-1, 6))
     print(f'Execution time: {time() - run:.3f} sec')
     return probs
 
 
 def train(net : model):
-    cnn_epochs = 3
+    cnn_epochs = 4
     em_epochs = 30
-    lr = net.get_lr() if net.get_lr() else 0.001
-    momentum = 0.9
+    lr = net.get_lr() if net.get_lr() else 0.00125
     params = {
         "batch_size": args.batch_size,
         "num_workers": args.workers,
@@ -200,8 +215,8 @@ def train(net : model):
     faces  = np.genfromtxt('resources/casia_boxes_refined.csv', dtype=np.str, delimiter=',')
 
     # ! comment while training
-    # trn = trn[:100]
-    # val = val[:100]
+    # trn = trn[:10]
+    # val = val[:10]
 
     transform = transforms.Compose([
                 transforms.Resize(256),
@@ -211,17 +226,19 @@ def train(net : model):
             ])
 
     trn_dataset = create_dataset(trn, faces, transform=transform)
-    trn_loader  = torch.utils.data.DataLoader(trn_dataset, **params)
-    trn_n_img   = len(trn_dataset)
-    trn_len     = int(len(trn_dataset) / 3)
-    trn_labels  = trn_dataset.get_labels()
+    trn_loader_1 = DataLoader(trn_dataset, **params, shuffle=True)
+    trn_loader_2 = DataLoader(trn_dataset, **params)
+    trn_n_img = len(trn_dataset)
+    trn_len = int(len(trn_dataset) / 3)
+    trn_labels = trn_dataset.get_labels()
 
     val_dataset = create_dataset(val, faces)
-    val_loader  = torch.utils.data.DataLoader(val_dataset, **params)
-    val_len     = int(len(val_dataset) / 3)
-    val_labels  = val_dataset.get_labels()
+    val_loader = DataLoader(val_dataset, **params)
+    val_len = int(len(val_dataset) / 3)
+    val_labels = val_dataset.get_labels()
 
     optimizer = optim.Adam(net.parameters(), lr=lr)
+    # optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, nesterov=True)
     net.set_optimizer_state_dict(optimizer)
     
     trn_errors = net.get_trn_errors()
@@ -237,20 +254,24 @@ def train(net : model):
 
     for em_epoch in range(net.get_em_epoch(), em_epochs):
 
-        # ? M-step -> maximizing F(θ,q) w.r.t p_θ(x|X) and p_θ(y|a,b,c)
+        ## M-step -> maximizing F(θ,q) w.r.t p_θ(x|X) and p_θ(y|a,b,c)
 
         for cnn_epoch in range(net.get_cnn_epoch(), cnn_epochs):
 
             print(f"\nepoch #{em_epoch * cnn_epochs + cnn_epoch + 1}")
-            # print(f"em epoch: {em_epoch + 1}, cnn epoch: {cnn_epoch + 1}")
-            start  = 0
-            finish = 0
             net.train()
-            # ? p(a=0|A) p(a=1|A) p(b=0|B) p(b=1|B) p(c=0|C) p(c=1|C)
-            trn_probs = np.empty((trn_len, 6))
-            trn_probs = trn_probs.ravel()
+            
+            start = 0
+            finish = 0
+            
+            ## p(a=0|A) p(a=1|A) p(b=0|B) p(b=1|B) p(c=0|C) p(c=1|C)
+            # trn_probs = np.empty((trn_len, 6))
+            # trn_probs = trn_probs.ravel()
 
-            for batch_iter, x in enumerate(trn_loader):
+            ## add soft weights
+            trn_dataset.weights = alpha
+
+            for batch_iter, (x, w) in enumerate(trn_loader_1):
                 run = time()
                 
                 optimizer.zero_grad()
@@ -263,27 +284,30 @@ def train(net : model):
                 finish += out_len
 
                 output = torch.squeeze(output)
-                # ? pX[0::2] => [ ⍺(a=0) or β(b=0) or γ(c=0) ]
-                # ? pX[1::2] => [ ⍺(a=1) or β(b=1) or  γ(c=1) ]
-                pX = alpha[start * 2 : finish * 2]
-                pX = pX.to(device)
+                output = torch.clamp(output, 0.001, 0.999)
+                
+                ## move weights to device
+                # w[:, 0] => [ ⍺(a=0) or β(b=0) or γ(c=0) ]
+                # w[:, 1] => [ ⍺(a=1) or β(b=1) or γ(c=1) ]
+                w = w.to(device)
 
-                # ? ⍺(a=0) * log(1 - p(a=1|A)) + ⍺(a=1) * log(p(a=1|A))
-                loss = (pX[0::2] * torch.log(1 - output + 1e-12) + pX[1::2] * torch.log(output + 1e-12)).sum()
+                ## calculate loss
+                # ⍺(a=0) * log(1 - p(a=1|A)) + ⍺(a=1) * log(p(a=1|A)) +
+                # β(b=0) * log(1 - p(b=1|B)) + β(b=1) * log(p(b=1|B)) + 
+                # γ(c=0) * log(1 - p(c=1|C)) + γ(c=1) * log(p(c=1|C))
+                loss = (w[:, 0] * torch.log(1 - output) + w[:, 1] * torch.log(output)).sum()
                 loss = -loss
 
                 loss.backward()
                 optimizer.step()
 
-                # output = output.detach().cpu().numpy()
-                # trn_probs[start*2+0:finish*2+0:2] = 1 - output
-                # trn_probs[start*2+1:finish*2+1:2] = output 
                 print(f"-> processed {finish}/{trn_n_img} images in {time() - run:.3f} sec, loss {loss:.5f}")
-            
-            net.eval()
 
+            ## remove soft weights
+            trn_dataset.weights = None
+            
             print("Calculating training error ...")
-            trn_probs = forward_pass(trn_loader, trn_len, device)
+            trn_probs = forward_pass(net, trn_loader_2, trn_len, device)
             trn_error = calculate_error(P1Iabc, trn_probs, trn_labels)
             trn_errors.append(trn_error)
             F = calculate_F(q, PyIabc, trn_probs)
@@ -294,7 +318,7 @@ def train(net : model):
 
 
             print("Calculating validation error ...")
-            val_probs = forward_pass(val_loader, val_len, device)
+            val_probs = forward_pass(net, val_loader, val_len, device)
             val_error = calculate_error(P1Iabc, val_probs, val_labels)
             val_errors.append(val_error)
             print(f"Validation error {(val_error * 100):.2f}%")
@@ -315,12 +339,17 @@ def train(net : model):
             plot_criterial(Fs, Ls, vline_each=cnn_epochs)
             plot_error(val_errors, trn_errors, vline_each=cnn_epochs)
 
-        # ? E-step
+        ## E-step
         print("Calculating new q(a,b,c)")
         q = calculate_q(PyIabc, trn_probs)
         q = q / np.sum(q, axis=1)[:, np.newaxis]
         alpha = calculate_alpha(q)
         PyIabc, P0Iabc, P1Iabc = calculate_PyIabc(q, trn_labels)
+
+        # Decrease learning rate and restart Adam
+        lr /= 1.25
+        optimizer = optim.Adam(net.parameters(), lr=lr)
+        # optimizer = optim.SGD(net.parameters(), lr=lr)
 
         print("Saving results ...")
         checkpoint = {

@@ -7,8 +7,10 @@ from warnings import filterwarnings
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 filterwarnings("ignore", "(Possibly )?corrupt EXIF data", UserWarning)
 
+
 def join(*paths):
     return os.path.join(os.path.dirname(__file__), *paths)
+
 
 class ListDataset(Dataset):
     def __init__(self,
@@ -17,10 +19,12 @@ class ListDataset(Dataset):
                 labels=None,
                 scale=0.5, 
                 transform=None,
-                path_to_images=None):
+                path_to_images=None,
+                weights=None):
         self.images = images
         self.bbs = bounding_boxes
         self.labels = labels
+        self.weights = weights
         self.scale = scale
         self.path_to_images = path_to_images if path_to_images is not None else 'images'
         if transform is None:
@@ -32,6 +36,7 @@ class ListDataset(Dataset):
         else:
             self.transform = transform
 
+
     def __getitem__(self, index):
         path  = self.images[index]
         bb    = self.bbs[index]
@@ -39,10 +44,16 @@ class ListDataset(Dataset):
         image = image.convert('RGB')
         image = self.crop_face(image, bb)
         image = self.transform(image)
-        return image
+        if self.weights is not None:
+            alpha = self.weights[index]
+            return (image, alpha)
+        else:
+            return image
+        
 
     def __len__(self):
         return len(self.images)
+
 
     def crop_face(self, img, bb):
         x1, y1, x2, y2 = bb
@@ -53,6 +64,7 @@ class ListDataset(Dataset):
         x2 += int(w_scale)
         y2 += int(h_scale)
         return img.crop((x1, y1, x2, y2))
+
 
     def get_labels(self):
         return self.labels
