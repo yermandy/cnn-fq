@@ -1,7 +1,11 @@
 .vscode
+.idea
 __pycache__
 
 temp/*
 resources/*
 images/*
 visualization/*
+
+tempCodeRunnerFile.py
+telegram.py
