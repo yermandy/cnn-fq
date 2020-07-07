@@ -20,7 +20,7 @@ Make sure that your project is orginesed as follows:
 Use the following script for CNN-FQ training:
 
 ``` Shell
-python train.py
+python training.py
 ```
 
 #### Prediction
