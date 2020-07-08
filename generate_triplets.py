@@ -3,7 +3,7 @@ import os
 from itertools import combinations
 from datetime import date
 
-n_pairs_per_id = 70
+n_pairs_per_id = 30
 
 file = np.genfromtxt("resources/casia_boxes_refined.csv", dtype=np.str, delimiter=",")
 features = np.load("resources/features_casia_0.5.npy")
@@ -11,6 +11,7 @@ features = np.load("resources/features_casia_0.5.npy")
 templates = file[:, 0]
 templates = [t.split("/")[0] for t in templates] 
 templates = np.array(templates)
+templates_indecies = np.arange(len(templates))
 
 np.set_printoptions(threshold=10)
 
@@ -36,13 +37,15 @@ def select_n(identities, n):
     distances = find_distances(pairs)
     dist_sorted = np.argsort(distances)
     pairs = pairs[dist_sorted]
-    pairs = np.vstack((pairs[-5-int(np.ceil(n/2)):], pairs[:int(np.floor(n/2))]))
+    pairs = np.vstack((pairs[-15-int(np.ceil(n/2)):], pairs[:int(np.floor(n/2))]))
     return pairs
 
-def populate_triplets(triplets, templates, u):
+def populate_triplets(triplets, u, val_len, is_val):
     same_idx = np.flatnonzero(templates == u) # A_i, B_i
-    diff_idx = np.flatnonzero(templates != u) # C_i
-
+    if is_val:
+        diff_idx = np.flatnonzero((templates != u) & (templates_indecies < val_len)) # C_i
+    else:
+        diff_idx = np.flatnonzero((templates != u) & (templates_indecies >= val_len)) # C_i
     n_chosen = len(same_idx) if len(same_idx) <= n_pairs_per_id * 2 else n_pairs_per_id * 2
     n_chosen = n_chosen if n_chosen % 2 == 0 else n_chosen - 1
     half = int(n_chosen / 2)
@@ -65,17 +68,18 @@ def create_triplets():
     x = np.searchsorted(cumulative_counts, n_files * 0.2)
     x = cumulative_counts[x]
 
-    # separate validation from training
+    ## separate validation from training
     val_templates = templates[:x]
-    trn_templates = templates[x:]    
+    trn_templates = templates[x:]
 
-    # populate val_triplets and trn_triplets
+    ## populate val_triplets and trn_triplets
     trn_triplets = None
     val_triplets = None
+    val_len = len(val_templates)
     for u in np.unique(val_templates):
-        val_triplets = populate_triplets(val_triplets, val_templates, u)
+        val_triplets = populate_triplets(val_triplets, u, val_len, True)
     for u in np.unique(trn_templates):
-        trn_triplets = populate_triplets(trn_triplets, trn_templates, u)
+        trn_triplets = populate_triplets(trn_triplets, u, val_len, False)
 
     return val_triplets, trn_triplets, 
 
