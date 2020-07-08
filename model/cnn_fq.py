@@ -546,17 +546,23 @@ class CNNFQ(nn.Module):
     def get_em_epoch(self):
         return self.checkpoint['em_epoch'] if 'em_epoch' in self.checkpoint else 0
 
+    def get_em_epochs(self, initial):
+        return self.checkpoint['em_epochs'] if 'em_epochs' in self.checkpoint else initial
+
     def get_cnn_epoch(self):
         return self.checkpoint['cnn_epoch'] if 'cnn_epoch' in self.checkpoint else 0
+
+    def get_cnn_epochs(self, initial):
+        return self.checkpoint['cnn_epochs'] if 'cnn_epochs' in self.checkpoint else initial
+
+    def get_lr(self, initial):
+        return self.checkpoint['lr'] if 'lr' in self.checkpoint else initial
     
     def get_val_errors(self):
         return self.checkpoint['val_errors'] if 'val_errors' in self.checkpoint else []
 
     def get_trn_errors(self):
         return self.checkpoint['trn_errors'] if 'trn_errors' in self.checkpoint else []
-
-    def get_lr(self):
-        return self.checkpoint['lr'] if 'lr' in self.checkpoint else []
 
     def get_Fs(self):
         return self.checkpoint['Fs'] if 'Fs' in self.checkpoint else []

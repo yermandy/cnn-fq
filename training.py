@@ -13,7 +13,7 @@ import telegram
 
 
 parser = argparse.ArgumentParser(description='CNN-FQ training')
-parser.add_argument('--batch_size', default=60, type=int, help='Batch size')
+parser.add_argument('--batch_size', default=90, type=int, help='Batch size')
 parser.add_argument('--workers', default=16, type=int, help='Workers number')
 parser.add_argument('--checkpoint', default='', type=str, help='Path to checkpoint file')
 parser.add_argument('--cuda', default=0, type=int, help='Cuda device')
@@ -200,9 +200,9 @@ def forward_pass(net, loader, dataset_len, device):
 
 
 def train(net : model):
-    cnn_epochs = 4
-    em_epochs = 30
-    lr = net.get_lr() if net.get_lr() else 0.00125
+    cnn_epochs = net.get_cnn_epochs(3)
+    em_epochs = net.get_em_epochs(30)
+    lr = net.get_lr(0.001)
     params = {
         "batch_size": args.batch_size,
         "num_workers": args.workers,
@@ -263,10 +263,6 @@ def train(net : model):
             
             start = 0
             finish = 0
-            
-            ## p(a=0|A) p(a=1|A) p(b=0|B) p(b=1|B) p(c=0|C) p(c=1|C)
-            # trn_probs = np.empty((trn_len, 6))
-            # trn_probs = trn_probs.ravel()
 
             ## add soft weights
             trn_dataset.weights = alpha
@@ -324,8 +320,8 @@ def train(net : model):
             print(f"Validation error {(val_error * 100):.2f}%")
 
 
+            ## save parameters of the model
             print("Saving results ...")
-            # save model weights, data and q
             checkpoint_n = em_epoch * cnn_epochs + cnn_epoch + 1
             checkpoint = {
                 'Fs': Fs, 'Ls': Ls, 'lr': lr, 'q': q,
@@ -346,9 +342,9 @@ def train(net : model):
         alpha = calculate_alpha(q)
         PyIabc, P0Iabc, P1Iabc = calculate_PyIabc(q, trn_labels)
 
-        # Decrease learning rate and restart Adam
-        lr /= 1.25
-        optimizer = optim.Adam(net.parameters(), lr=lr)
+        ## Decrease learning rate and restart Adam
+        # lr /= 1.25
+        # optimizer = optim.Adam(net.parameters(), lr=lr)
         # optimizer = optim.SGD(net.parameters(), lr=lr)
 
         print("Saving results ...")
