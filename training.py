@@ -202,7 +202,7 @@ def forward_pass(net, loader, dataset_len, device):
 def train(net : model):
     cnn_epochs = net.get_cnn_epochs(3)
     em_epochs = net.get_em_epochs(30)
-    lr = net.get_lr(0.001)
+    lr = net.get_lr(0.0001)
     params = {
         "batch_size": args.batch_size,
         "num_workers": args.workers,
@@ -252,11 +252,14 @@ def train(net : model):
     alpha = calculate_alpha(q)
     PyIabc, P0Iabc, P1Iabc = calculate_PyIabc(q, trn_labels)
 
-    for em_epoch in range(net.get_em_epoch(), em_epochs):
+    from_em_epoch = net.get_em_epoch()
+    from_cnn_epoch = net.get_cnn_epoch()
+
+    for em_epoch in range(from_em_epoch, em_epochs):
 
         ## M-step -> maximizing F(θ,q) w.r.t p_θ(x|X) and p_θ(y|a,b,c)
 
-        for cnn_epoch in range(net.get_cnn_epoch(), cnn_epochs):
+        for cnn_epoch in range(from_cnn_epoch, cnn_epochs):
 
             print(f"\nepoch #{em_epoch * cnn_epochs + cnn_epoch + 1}")
             net.train()
@@ -334,6 +337,9 @@ def train(net : model):
             torch.save(checkpoint, f'results/checkpoints/checkpoint_{checkpoint_n}.pt')
             plot_criterial(Fs, Ls, vline_each=cnn_epochs)
             plot_error(val_errors, trn_errors, vline_each=cnn_epochs)
+
+        ## set next cnn epoch to 0
+        from_cnn_epoch = 0
 
         ## E-step
         print("Calculating new q(a,b,c)")
