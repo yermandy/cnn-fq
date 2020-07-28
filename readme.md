@@ -1,5 +1,17 @@
 ## Face Quality Prediction with CNN-FQ
 
+#### Dependencies
+
+The project is implemented in Python 3.7.3 with following packages:
+``` Bash
+torch             1.5.1
+torchvision       0.6.1
+numpy             1.19.0
+tqdm              4.42.0
+Pillow            6.1.0
+requests          2.22.0    # can be omitted (comment imports)
+```
+
 #### Training
 
 Use ```generate_triplets.py``` to generate triplets for training: ```casia_trn.csv``` and ```casia_val.csv``` 
