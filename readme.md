@@ -30,3 +30,17 @@ Use the following script for quality prediction with CNN-FQ:
 ``` Shell
 python prediction.py
 ```
+
+Possible arguments
+```
+ARGUMENT        TYPE    DESCRIPTION
+--cuda          INT     CUDA device to run on
+--ref           STR     Path to CSV file with images and bouding boxes
+--images        STR     Path to images folder
+--save_to       STR     Path to output file folder 
+--batch         INT     Batch size 
+--workers       INT     Number of workers
+--checkpoint    STR     Path to checkpoint file
+--uid           STR     Unique id for the output file
+--save_each     INT     Output file saving frequency
+```
