@@ -63,6 +63,7 @@ def predict(net):
                 np.save(file_name, probs)
 
     np.save(file_name, probs)
+    print(f'Predictions are saved to: ./{file_name}')
 
 
 if __name__ == '__main__':
