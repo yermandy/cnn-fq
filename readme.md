@@ -4,7 +4,7 @@
 
 Use ```generate_triplets.py``` to generate triplets for training: ```casia_trn.csv``` and ```casia_val.csv``` 
 
-Make sure that your project is orginesed as follows:
+Make sure that your project is organized as follows:
 
 ``` Shell
 ├── resources
@@ -24,6 +24,23 @@ python training.py
 ```
 
 #### Prediction
+
+
+[Download](https://drive.google.com/drive/folders/1PGk0ZjCzG-o7VPQn_CfekF1h9ZsCqWFU?usp=sharing) pre-trained model or train the network yourself.
+
+Make sure that your project is organized as follows:
+
+``` Shell
+├── results
+│   └── checkpoints
+│       └── checkpoint.pt # you can download pre-trained model with the link above
+├── resources
+│   └── bounding_boxes.csv
+└── images
+    └── casia
+        └── 0000186
+            └── ...
+```
 
 Use the following script for quality prediction with CNN-FQ:
 
