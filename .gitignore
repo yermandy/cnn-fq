@@ -6,6 +6,10 @@ temp/*
 resources/*
 images/*
 visualization/*
+results/*
 
 tempCodeRunnerFile.py
 telegram.py
+
+
+!resources/bounding_boxes.csv
