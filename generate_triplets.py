@@ -3,7 +3,7 @@ import os
 from itertools import combinations
 from datetime import date
 
-n_pairs_per_id = 30
+n_pairs_per_id = 10
 
 file = np.genfromtxt("resources/casia_boxes_refined.csv", dtype=np.str, delimiter=",")
 features = np.load("resources/features_casia_0.5.npy")
@@ -26,7 +26,7 @@ def find_distances(pairs):
     distances = 1 - np.einsum("ij,ij->i", t1, t2)
     return distances
 
-def select_n(identities, n):
+def select_n(identities, n, additional_negatives=7):
     pairs = combinations(identities, 2)
     pairs = [*pairs]
     pairs = np.array(pairs)
@@ -37,7 +37,7 @@ def select_n(identities, n):
     distances = find_distances(pairs)
     dist_sorted = np.argsort(distances)
     pairs = pairs[dist_sorted]
-    pairs = np.vstack((pairs[-15-int(np.ceil(n/2)):], pairs[:int(np.floor(n/2))]))
+    pairs = np.vstack((pairs[-additional_negatives-int(np.ceil(n/2)):], pairs[:int(np.floor(n/2))]))
     return pairs
 
 def populate_triplets(triplets, u, val_len, is_val):
