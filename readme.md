@@ -14,7 +14,9 @@ requests          2.22.0    # can be omitted (comment imports)
 
 #### Training
 
-Use ```generate_triplets.py``` to generate triplets for training: ```casia_trn.csv``` and ```casia_val.csv``` 
+[Download](https://drive.google.com/drive/folders/1PGk0ZjCzG-o7VPQn_CfekF1h9ZsCqWFU?usp=sharing) csv file with bounding boxes found with [RetinaFace](https://github.com/yermandy/retina-face-detector) detector `casia_boxes_refined.csv` and feature vectors extracted with [SENet-50](https://github.com/yermandy/senet-50) `features_casia_0.5.npy`
+
+Use `generate_triplets.py` to generate triplets for training: `casia_trn.csv` and `casia_val.csv`
 
 Make sure that your project is organized as follows:
 
